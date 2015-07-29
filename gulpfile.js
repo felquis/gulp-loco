@@ -1,7 +1,8 @@
 var gulp = require('gulp');
+var runSequence = require('run-sequence');
 
 /**
- * CSS Modules
+ * Tasks de CSS
  */
 var autoprefixer = require('gulp-autoprefixer');
 var rename = require('gulp-rename');
@@ -14,10 +15,10 @@ var mergeStream = require('merge-stream');
 var plumber = require('gulp-plumber');
 
 /**
- * Build dos arquivos relacionados ao Ionic
+ * Cria o arquivo `css/ionic{.min}.css`
  */
 gulp.task('ionic-styles', function () {
-	var mainModule = gulp.src(['src/variables/ionic.scss']);
+	var mainModule = gulp.src(['src/scss/ionic.scss']);
 
   return mainModule
   	.pipe(plumber())
@@ -34,25 +35,25 @@ gulp.task('ionic-styles', function () {
 });
 
 /**
- * Cria os estilos dos states do app
+ * Cria o arquivo `css/app{.min}.css`
  */
 gulp.task('styles', function() {
-	var mainModule = gulp.src(['src/variables/variables.scss']);
-	var otherModules = gulp.src(['src/{,*/,*/*/}*.scss', '!src/variables/**'])
-	var merged = mergeStream(mainModule, otherModules);
+  var mainModule = gulp.src(['src/scss/variables.scss']);
+	var otherModules = gulp.src(['src/states/{,*/}*.scss']);
+  var merged = mergeStream(mainModule, otherModules);
 
   return merged
-  	.pipe(sourcemaps.init())
+    .pipe(plumber())
+    .pipe(sourcemaps.init())
   	.pipe(concat('css/app.css'))
-  	.pipe(plumber())
-  	.pipe(sass({outputStyle: 'expanded'}))
+    .pipe(sass({outputStyle: 'expanded'}))
     .pipe(autoprefixer('last 2 version'))
     .pipe(gulp.dest('dist'))
     .pipe(sourcemaps.write('./'))
-    .pipe(minifycss())
-    .pipe(rename({suffix: '.min'}))
-    .pipe(gulp.dest('dist'))
-    .pipe(notify({ message: 'Styles task complete' }));
+    // .pipe(minifycss())
+    // .pipe(rename({suffix: '.min'}))
+    // .pipe(gulp.dest('dist'))
+    // .pipe(notify({ message: 'Styles task complete' }));
 });
 
 /**
@@ -60,12 +61,18 @@ gulp.task('styles', function() {
  */
 var browserSync = require('browser-sync').create('gulp');
 
-gulp.task('browser', ['ionic-styles', 'styles'], function() {
+gulp.task('prepare', function(callback) {
+  runSequence(['ionic-styles', 'styles'],
+              ['javascript'],
+              callback);
+});
+
+gulp.task('browser', ['prepare'], function() {
 	browserSync.init({
       server: {
       	// Estes são os arquivos do server, usamos o `dist`
       	// para carregar alguns arquivos que já foram processados
-		    baseDir: ['./src', './dist']
+		    baseDir: ['./src', './dist', './bower_components']
 			}
   });
 
@@ -75,4 +82,26 @@ gulp.task('browser', ['ionic-styles', 'styles'], function() {
   gulp.watch('src/variables/ionic.scss', ['ionic-styles']);
   // Se algum arquivo HTML for alterado, atualiza!
   gulp.watch('src/{,*/}*.html').on('change', browserSync.reload);
+  // Ao alterar algum arquivo de JavaScript
+  gulp.watch(['src/{,*/,*/*/}*.js'], ['javascript']);
 })
+
+/**
+ * Tasks de JavaScript
+ */
+var fs = require('fs');
+var babel = require('gulp-babel');
+
+gulp.task('javascript', function () {
+	var options = {
+		modules: 'umd'
+	}
+
+  return gulp.src('src/{,*/,*/*/}*.js')
+  	.pipe(plumber())
+    .pipe(sourcemaps.init())
+    .pipe(babel(options))
+    .pipe(concat('app.js'))
+    .pipe(sourcemaps.write('./'))
+    .pipe(gulp.dest('dist/scripts'));
+});
